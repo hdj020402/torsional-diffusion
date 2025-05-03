@@ -50,10 +50,25 @@ class TensorProductConvLayer(torch.nn.Module):
 
 
 class TensorProductScoreModel(torch.nn.Module):
-    def __init__(self, in_node_features=74, in_edge_features=4, sigma_embed_dim=32, sigma_min=0.01 * np.pi,
-                 sigma_max=np.pi, sh_lmax=2, ns=32, nv=8, num_conv_layers=4, max_radius=5, radius_embed_dim=50,
-                 scale_by_sigma=True, use_second_order_repr=True, batch_norm=True, residual=True
-                 ):
+    def __init__(
+        self,
+        in_node_features: int,
+        in_edge_features: int,
+        sigma_embed_dim: int,
+        sigma_min: float,
+        sigma_max: float,
+        sh_lmax: int,
+        ns: int,
+        nv: int,
+        num_conv_layers: int,
+        max_radius: int,
+        radius_embed_dim: int,
+        scale_by_sigma: bool=True,
+        torus: Torus | None=None,
+        use_second_order_repr: bool=True,
+        batch_norm: bool=True,
+        residual: bool=True
+        ) -> None:
         super(TensorProductScoreModel, self).__init__()
         self.in_node_features = in_node_features
         self.in_edge_features = in_edge_features
@@ -65,6 +80,7 @@ class TensorProductScoreModel(torch.nn.Module):
         self.sh_irreps = o3.Irreps.spherical_harmonics(lmax=sh_lmax)
         self.ns, self.nv = ns, nv
         self.scale_by_sigma = scale_by_sigma
+        self.torus = torus
 
         self.node_embedding = nn.Sequential(
             nn.Linear(in_node_features + sigma_embed_dim, ns),
@@ -159,10 +175,9 @@ class TensorProductScoreModel(torch.nn.Module):
         data.edge_sigma = data.node_sigma[data.edge_index[0]][data.edge_mask]
 
         if self.scale_by_sigma:
-            score_norm = torus.score_norm(data.edge_sigma.cpu().numpy())
+            score_norm = self.torus.score_norm(data.edge_sigma.cpu().numpy())
             score_norm = torch.tensor(score_norm, device=data.x.device)
             data.edge_pred = data.edge_pred * torch.sqrt(score_norm)
-
         return data
 
     def build_bond_conv_graph(self, data, node_attr):
