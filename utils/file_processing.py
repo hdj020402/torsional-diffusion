@@ -3,10 +3,12 @@ import torch
 import optuna
 from torch_geometric.loader import DataLoader
 from typing import Literal
+from copy import deepcopy
 
 from dataset.graph import Graph
 from model.score_model import TensorProductScoreModel
 from utils.utils import convert_time
+from utils.save_model import SaveModel
 from utils.post_processing import read_log
 
 def setup_logger(logger_name: str, log_file: str, level=logging.INFO) -> logging.Logger:
@@ -85,8 +87,6 @@ class FileProcessing:
         val_loader: DataLoader,
         test_loader: DataLoader,
         pred_loader: DataLoader,
-        mean: float,
-        std: float,
         model: TensorProductScoreModel,
         end_time: float,
         start_time: float,
@@ -111,7 +111,6 @@ class FileProcessing:
         self.training_logger.info(f"size of val set: {len(val_loader.dataset)}")
         self.training_logger.info(f"size of training set: {len(train_loader.dataset)}")
         self.training_logger.info(f"batch size: {train_loader.batch_size}")
-        self.training_logger.info(f"mean: {mean}, std: {std}")
         self.training_logger.info(f"Model:\n{model}")
         self.training_logger.info(f"Data processing time: {hours} h {minutes} m {seconds} s")
         self.training_logger.info("Begin training...")
@@ -131,16 +130,10 @@ class FileProcessing:
         self,
         model: torch.nn.Module,
         optimizer: torch.optim.Optimizer,
-        device: torch.device
-        ) -> tuple[int, dict]:
+        device: torch.device,
+        model_saving: SaveModel | None=None
+        ) -> int:
         start_epoch = 1
-        criteria_info_dict = {}
-        criteria = self.param['optim_criteria']
-        criteria_info_dict[criteria] = {
-            'best_error': math.inf,
-            'best_epoch': None,
-            'best_epoch_info': None
-        }
         pretrained_model = self.param['pretrained_model']
         mode = self.param['mode']
         if mode in ['prediction', 'fine-tuning']:
@@ -161,14 +154,13 @@ class FileProcessing:
                 pre_log_text = pre_log_info.restart(start_epoch)
                 with open(self.log_file, 'a') as lf:
                     lf.writelines(pre_log_text)
-                pre_epoch_list: list = pre_log_info.get_performance()['Epoch'][:start_epoch - 1]
-                criteria_list: list = pre_log_info.get_performance()['Overall']['Val'][criteria][:start_epoch - 1]
-                criteria_info_dict[criteria]['best_error'] = min(criteria_list)
-                best_index = criteria_list.index(criteria_info_dict[criteria]['best_error'])
-                criteria_info_dict[criteria]['best_epoch'] = pre_epoch_list[best_index]
-                criteria_info_dict[criteria]['best_epoch_info'] = pre_log_text[best_index]
+
+                best_model, best_optimizer = deepcopy(model), deepcopy(optimizer)
+                pre_best_model: dict = torch.load(f'{pre_dir}/Model/best_model_{pre_TIME}.pth')
+                self.load_model(pre_best_model, best_model, best_optimizer, mode)
+                model_saving.best_model(best_model, best_optimizer, pre_best_model['epoch'], pre_best_model['val_loss'])
         self.start_epoch = start_epoch
-        return start_epoch, criteria_info_dict
+        return start_epoch
 
     # def pred_log(self, info: dict):
     #     self.prediction_logger.info(json.dumps(info))
@@ -177,23 +169,23 @@ class FileProcessing:
         self,
         epoch: int,
         info: dict,
-        criteria_info_dict: dict
-        ):
-        criteria = self.param['optim_criteria']
+        best_val_loss: float,
+        best_epoch: int,
+        ) -> None:
+        self.best_val_loss = best_val_loss
+        self.best_epoch = best_epoch
         if epoch % self.param['output_step'] == 0:
             self.training_logger.info(
                 f'{info} '
-                f'Best is epoch {criteria_info_dict[criteria]["best_epoch"]} with value'
-                f': {criteria_info_dict[criteria]["best_error"]}.'
+                f'Best is epoch {best_epoch} with value: {best_val_loss}.'
                 )
 
-    def hptuning_log(self, study: optuna.Study):
+    def hptuning_log(self, study: optuna.Study) -> None:
         self.hptuning_logger.info(f'best value: {study.best_value}')
         self.hptuning_logger.info(f'best params: {study.best_params}')
 
     def ending_log(
         self,
-        criteria_info_dict: dict,
         end_time: float,
         start_time: float,
         epoch: int
@@ -201,10 +193,8 @@ class FileProcessing:
         tot_time = end_time - start_time
         epoch_time = tot_time / (epoch - self.start_epoch + 1)
         self.training_logger.info('Ending...')
-        criteria = self.param['optim_criteria']
-        self.training_logger.info(f"Best_{criteria}_val: {criteria_info_dict[criteria]['best_error']}")
-        self.training_logger.info(f"Best_epoch_{criteria}: {criteria_info_dict[criteria]['best_epoch']}")
-        self.training_logger.info(f"Best_epoch_info: {criteria_info_dict[criteria]['best_epoch_info']}")
+        self.training_logger.info(f"Best_val_loss: {self.best_val_loss}")
+        self.training_logger.info(f"Best_epoch: {self.best_epoch}")
         hours, minutes, seconds = convert_time(tot_time)
         self.training_logger.info(f'Total_time: {hours} h {minutes} m {seconds} s')
         hours, minutes, seconds = convert_time(epoch_time)

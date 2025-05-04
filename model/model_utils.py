@@ -1,11 +1,28 @@
 import torch
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from model.score_model import TensorProductScoreModel
 
-def gen_model(param: dict, dataset, ) -> TensorProductScoreModel:
+from model.score_model import TensorProductScoreModel
+from training.torus import Torus
+
+def gen_model(param: dict, torus: Torus) -> TensorProductScoreModel:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     net = TensorProductScoreModel(
-        ...   # TODO: Complete the arguments
+        in_node_features=len(param['atom_type']) + 39,
+        in_edge_features=4,
+        sigma_embed_dim=param['sigma_embed_dim'],
+        sigma_min=param['sigma_min'],
+        sigma_max=param['sigma_max'],
+        sh_lmax=param['sh_lmax'],
+        ns=param['ns'],
+        nv=param['nv'],
+        num_conv_layers=param['num_conv_layers'],
+        max_radius=param['max_radius'],
+        radius_embed_dim=param['radius_embed_dim'],
+        scale_by_sigma=param['scale_by_sigma'],
+        torus=torus,
+        use_second_order_repr=param['use_second_order_repr'],
+        batch_norm=param['batch_norm'],
+        residual=param['residual'],
         )
     model = net.to(device)
     return model

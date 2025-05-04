@@ -1,1 +1,41 @@
+mode: training
+
+path: ...
+pickle_file: ...
+split_method: manual
+split_file: ...
+train_size: 0.6
+val_size: 0.2
+seed: 42
 atom_type: ['H', 'C', 'N', 'O', 'F']
+
+epoch_num: 250
+output_step: 1
+model_save_step: 50
+early_stopping:
+  patience: 20
+  delta: 0
+batch_size: 32
+num_workers: 4
+lr: 0.001
+optimizer: Adam
+scheduler:
+  type: ReduceLROnPlateau
+  factor: 0.7
+  patience: 20
+  min_lr: 0.00001
+sigma_min: 0.0314
+sigma_max: 3.14
+boltzmann_weight: Flase
+
+sigma_embed_dim: 32
+radius_embed_dim: 50
+num_conv_layers: 4
+max_radius: 5.0
+scale_by_sigma: True
+sh_lmax: 2
+ns: 32
+nv: 8
+residual: True
+batch_norm: True
+use_second_order_repr: True

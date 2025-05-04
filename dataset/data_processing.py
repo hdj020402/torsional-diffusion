@@ -28,9 +28,9 @@ class DataProcessing:
             transform=transform,
             pickle_file=self.param['pickle_file'],
             atom_type=self.param['atom_type'],
-            default_node_attr=self.param['default_node_attr'],
-            default_edge_attr=self.param['default_edge_attr'],
-            boltzmann_resampler=self.param['boltzmann_resampler'],
+            default_node_attr=None,
+            default_edge_attr=None,
+            boltzmann_resampler=None,
             reprocess=self.reprocess,
             num_workers=self.param['num_workers']
         )
@@ -58,7 +58,7 @@ class DataProcessing:
                 )
 
         elif self.param['split_method'] == 'manual':
-            indices = np.load(self.param['split_path'], allow_pickle=True)
+            indices = np.load(self.param['split_file'], allow_pickle=True)
             train_dataset = Subset(self.dataset, indices[0])
             val_dataset = Subset(self.dataset, indices[1])
             test_dataset = Subset(self.dataset, indices[2])
