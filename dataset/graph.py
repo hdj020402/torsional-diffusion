@@ -7,6 +7,7 @@ from typing import Callable, List, Optional, Dict
 from torch_geometric.data import Data, InMemoryDataset
 from rdkit import Chem, RDLogger
 RDLogger.DisableLog('rdApp.*')
+from copy import deepcopy
 
 from dataset.featurization import featurize_mol, dihedral_pattern
 from utils.torsion import get_transformation_mask
@@ -35,7 +36,8 @@ class Graph(InMemoryDataset):
         if self.reprocess:
             self._reprocess()
         super().__init__(root, transform)
-        self.data, self.slices = torch.load(self.processed_paths[0], weights_only=False)
+        with open(self.processed_paths[0], 'rb') as f:
+            self.data = pickle.load(f)
 
     @property
     def raw_file_names(self) -> List[str]:
@@ -47,7 +49,7 @@ class Graph(InMemoryDataset):
     def processed_file_names(self) -> str:
         '''define default path to processed data file.
         '''
-        return 'graph_data.pt'
+        return 'graph_data.pkl'
 
     def _reprocess(self):
         if os.path.exists(os.path.join(self.root, 'processed/')):
@@ -62,7 +64,8 @@ class Graph(InMemoryDataset):
         with Pool(self.num_workers) as pool:
             datapoints = list(tqdm.tqdm(pool.imap(self.featurize_conformer, db.values()), total=len(db)))
 
-        torch.save(self.collate(datapoints), self.processed_paths[0])
+        with open(self.processed_paths[0], 'wb') as f:
+            pickle.dump(datapoints, f)
 
     def filter_smiles(
         self,
@@ -148,3 +151,11 @@ class Graph(InMemoryDataset):
 
         return data
 
+    def len(self):
+        return len(self.data)
+
+    def get(self, idx):
+        data = self.data[idx]
+        if self.boltzmann_resampler:
+            self.boltzmann_resampler.try_resample(data)
+        return deepcopy(data)
