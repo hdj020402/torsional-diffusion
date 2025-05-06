@@ -15,7 +15,6 @@ class DataProcessing:
         self.dataset = self.gen_dataset()
         self.train_dataset, self.val_dataset, self.test_dataset = self.split_dataset()
         self.train_loader, self.val_loader, self.test_loader = self.gen_loader()
-        pass
 
     def gen_dataset(self) -> Graph:
         transform = TorsionNoiseTransform(

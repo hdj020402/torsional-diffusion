@@ -1,11 +1,10 @@
-import os, json, yaml, shutil, math, logging
+import os, json, yaml, shutil, logging
 import torch
 import optuna
 from torch_geometric.loader import DataLoader
 from typing import Literal
 from copy import deepcopy
 
-from dataset.graph import Graph
 from model.score_model import TensorProductScoreModel
 from utils.utils import convert_time
 from utils.save_model import SaveModel
@@ -63,6 +62,21 @@ class FileProcessing:
             self.log_file = f'HPTuning_Recording/{self.jobtype}/{self.TIME}/{trial_name}/training_{trial_name}.log'
             self.training_logger = setup_logger(f'training_{trial_name}_logger', self.log_file)
 
+        elif self.jobtype == 'generation':
+            os.makedirs(f'Generation_Recording/{self.jobtype}/{self.TIME}')
+            if self.param['dump_pymol']:
+                self.pdb_dir = f'Generation_Recording/{self.jobtype}/{self.TIME}/PDB'
+                os.makedirs(self.pdb_dir)
+            else:
+                self.pdb_dir = None
+            self.data_dir = f'Generation_Recording/{self.jobtype}/{self.TIME}/Data'
+            os.makedirs(self.data_dir)
+            self.model_dir = f'Generation_Recording/{self.jobtype}/{self.TIME}/Model'
+            os.makedirs(self.model_dir)
+            shutil.copy(self.param['pretrained_model'], self.model_dir)
+            self.log_file = f'Generation_Recording/{self.jobtype}/{self.TIME}/generation_{self.TIME}.log'
+            self.generation_logger = setup_logger(f'generation_{self.TIME}_logger', self.log_file)
+
         else:
             os.makedirs(f'Training_Recording/{self.jobtype}/{self.TIME}')
             with open(f'Training_Recording/{self.jobtype}/{self.TIME}/model_parameters.yml', 'w', encoding = 'utf-8') as mp:
@@ -82,11 +96,9 @@ class FileProcessing:
 
     def basic_info_log(
         self,
-        dataset: Graph,
         train_loader: DataLoader,
         val_loader: DataLoader,
         test_loader: DataLoader,
-        pred_loader: DataLoader,
         model: TensorProductScoreModel,
         end_time: float,
         start_time: float,
@@ -106,7 +118,6 @@ class FileProcessing:
         # else:
         self.training_logger.info(f"data_path: {os.path.abspath(self.param['path'])}")
         self.training_logger.info(json.dumps(self.param))
-        self.training_logger.info(f"dataset: {str(dataset.data)}")
         self.training_logger.info(f"size of test set: {len(test_loader.dataset)}")
         self.training_logger.info(f"size of val set: {len(val_loader.dataset)}")
         self.training_logger.info(f"size of training set: {len(train_loader.dataset)}")
@@ -136,10 +147,15 @@ class FileProcessing:
         start_epoch = 1
         pretrained_model = self.param['pretrained_model']
         mode = self.param['mode']
-        if mode in ['prediction', 'fine-tuning']:
+        if mode in ['generation', 'fine-tuning']:
             state_dict: dict = torch.load(pretrained_model, map_location=device)
             self.load_model(state_dict, model, optimizer, mode)
             start_epoch = 1
+            pre_dir = os.path.dirname(os.path.dirname(os.path.dirname(pretrained_model)))
+            with open(f'{pre_dir}/model_parameters.yml', 'r', encoding='utf-8') as mp:
+                pre_param: dict = yaml.full_load(mp)
+            for p in [...]:   # TODO: Complete this list
+                self.param[p] = pre_param[p]
         # resume training
         elif mode == 'training':
             if pretrained_model:
@@ -162,8 +178,14 @@ class FileProcessing:
         self.start_epoch = start_epoch
         return start_epoch
 
-    # def pred_log(self, info: dict):
-    #     self.prediction_logger.info(json.dumps(info))
+    def generation_log(self, idx: int, smi: str, mols: list | None):
+        if mols:
+            info = json.dumps({
+                'idx': idx, 'smiles': smi, 'rotable_bonds': mols[0].n_rotable_bonds, 'n_confs': len(mols)
+                })
+            self.generation_logger.info(info)
+        else:
+            self.generation_logger.error(f'Failed to generate conformers for {smi}')
 
     def training_log(
         self,
@@ -188,15 +210,30 @@ class FileProcessing:
         self,
         end_time: float,
         start_time: float,
-        epoch: int
+        epoch: int | None,
+        conformer_dict: dict | None
         ) -> None:
         tot_time = end_time - start_time
-        epoch_time = tot_time / (epoch - self.start_epoch + 1)
-        self.training_logger.info('Ending...')
-        self.training_logger.info(f"Best_val_loss: {self.best_val_loss}")
-        self.training_logger.info(f"Best_epoch: {self.best_epoch}")
-        hours, minutes, seconds = convert_time(tot_time)
-        self.training_logger.info(f'Total_time: {hours} h {minutes} m {seconds} s')
-        hours, minutes, seconds = convert_time(epoch_time)
-        self.training_logger.info(f'Time_per_epoch: {hours} h {minutes} m {seconds} s')
+        if self.param['mode'] == 'training':
+            epoch_time = tot_time / (epoch - self.start_epoch + 1)
+            self.training_logger.info('Ending...')
+            self.training_logger.info(f"Best val loss: {self.best_val_loss}")
+            self.training_logger.info(f"Best epoch: {self.best_epoch}")
+            hours, minutes, seconds = convert_time(tot_time)
+            self.training_logger.info(f'Total time: {hours} h {minutes} m {seconds} s')
+            hours, minutes, seconds = convert_time(epoch_time)
+            self.training_logger.info(f'Time per epoch: {hours} h {minutes} m {seconds} s')
+        elif self.param['mode'] == 'generation':
+            num_fail = sum(1 for value in conformer_dict.values() if value is None)
+            num_success = len(conformer_dict) - num_fail
+            avg_time = tot_time / num_success
+            self.generation_logger.info('Ending...')
+            self.generation_logger.info(
+                f'Successfully generated conformers for {num_success} out of '
+                f'{len(conformer_dict)} molecules; {num_fail} failed.'
+                )
+            hours, minutes, seconds = convert_time(tot_time)
+            self.generation_logger.info(f'Total time: {hours} h {minutes} m {seconds} s')
+            hours, minutes, seconds = convert_time(avg_time)
+            self.generation_logger.info(f'Time per molecule: {hours} h {minutes} m {seconds} s')
 
