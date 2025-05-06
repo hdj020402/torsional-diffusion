@@ -13,8 +13,8 @@ class DataProcessing:
         self.reprocess = reprocess
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.dataset = self.gen_dataset()
-        self.train_dataset, self.val_dataset, self.test_dataset, self.pred_dataset = self.split_dataset()
-        self.train_loader, self.val_loader, self.test_loader, self.pred_loader = self.gen_loader()
+        self.train_dataset, self.val_dataset, self.test_dataset = self.split_dataset()
+        self.train_loader, self.val_loader, self.test_loader = self.gen_loader()
         pass
 
     def gen_dataset(self) -> Graph:
@@ -38,14 +38,7 @@ class DataProcessing:
             yaml.dump(self.param, mp, allow_unicode=True, sort_keys=False)
         return dataset
 
-    def split_dataset(self) -> tuple[Subset, Subset, Subset, Graph]:
-        train_dataset = None
-        val_dataset = None
-        test_dataset = None
-        pred_dataset = None
-
-        pred_dataset = self.dataset
-
+    def split_dataset(self) -> tuple[Subset, Subset, Subset]:
         if self.param['split_method'] == 'random':
             train_size = int(self.param['train_size'] * len(self.dataset))
             val_size = int(self.param['val_size'] * len(self.dataset))
@@ -66,9 +59,13 @@ class DataProcessing:
         else:
             raise NotImplementedError("Split method not implemented.")
 
-        return train_dataset, val_dataset, test_dataset, pred_dataset
+        none_idx = set([i for i, data in enumerate(self.dataset.data) if data is None])
+        for dataset in [train_dataset, val_dataset, test_dataset]:
+            dataset.indices = list(set(dataset.indices) - none_idx)
 
-    def gen_loader(self) -> tuple[DataLoader, DataLoader, DataLoader, DataLoader]:
+        return train_dataset, val_dataset, test_dataset
+
+    def gen_loader(self) -> tuple[DataLoader, DataLoader, DataLoader]:
         train_loader = DataLoader(
             self.train_dataset,
             batch_size = self.param['batch_size'],
@@ -90,12 +87,5 @@ class DataProcessing:
             shuffle = False,
             pin_memory=True
             )
-        pred_loader = DataLoader(
-            self.pred_dataset,
-            batch_size = self.param['batch_size'],
-            num_workers = self.param['num_workers'],
-            shuffle = False,
-            pin_memory=True
-            )
 
-        return train_loader, val_loader, test_loader, pred_loader
+        return train_loader, val_loader, test_loader
