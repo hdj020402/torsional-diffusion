@@ -7,7 +7,7 @@ from training.torus import Torus
 def gen_model(param: dict, torus: Torus) -> TensorProductScoreModel:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     net = TensorProductScoreModel(
-        in_node_features=len(param['atom_type']) + 39,
+        in_node_features=len(param['atom_type']) + 40,
         in_edge_features=4,
         sigma_embed_dim=param['sigma_embed_dim'],
         sigma_min=param['sigma_min'],
