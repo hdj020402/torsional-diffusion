@@ -1,0 +1,12 @@
+*.pyc
+**/__pycache__/
+Training_Recording/
+Prediction_Recording/
+HPTuning_Recording/
+**/processed/
+*.png
+test.ipynb
+*.json
+model_parameters.yml
+hparam_tuning.yml
+feature_filter.yml
