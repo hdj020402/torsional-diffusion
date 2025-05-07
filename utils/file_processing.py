@@ -154,7 +154,11 @@ class FileProcessing:
             pre_dir = os.path.dirname(os.path.dirname(os.path.dirname(pretrained_model)))
             with open(f'{pre_dir}/model_parameters.yml', 'r', encoding='utf-8') as mp:
                 pre_param: dict = yaml.full_load(mp)
-            for p in [...]:   # TODO: Complete this list
+            for p in [
+                'atom_type', 'sigma_embed_dim', 'sigma_min', 'sigma_max', 'sh_lmax', 'ns',
+                'nv', 'num_conv_layers', 'max_radius', 'radius_embed_dim', 'scale_by_sigma',
+                'use_second_order_repr', 'batch_norm', 'residual'
+                ]:
                 self.param[p] = pre_param[p]
         # resume training
         elif mode == 'training':
