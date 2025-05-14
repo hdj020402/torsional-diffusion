@@ -1,11 +1,12 @@
 import os, json, yaml, shutil, logging
-import torch
-import optuna
+import torch, optuna
+import numpy as np
 from torch_geometric.loader import DataLoader
 from typing import Literal
 from copy import deepcopy
 
 from model.score_model import TensorProductScoreModel
+from evaluation.eval_utils import EvaluationMetrics
 from utils.utils import convert_time
 from utils.save_model import SaveModel
 from utils.post_processing import read_log
@@ -76,6 +77,15 @@ class FileProcessing:
             shutil.copy(self.param['pretrained_model'], self.model_dir)
             self.log_file = f'Generation_Recording/{self.jobtype}/{self.TIME}/generation_{self.TIME}.log'
             self.generation_logger = setup_logger(f'generation_{self.TIME}_logger', self.log_file)
+
+        elif self.jobtype == 'evaluation':
+            os.makedirs(f'Evaluation_Recording/{self.jobtype}/{self.TIME}')
+            self.data_dir = f'Evaluation_Recording/{self.jobtype}/{self.TIME}/Data'
+            os.makedirs(self.data_dir)
+            shutil.copy(self.param['true_confs'], self.data_dir)
+            shutil.copy(self.param['gen_confs'], self.data_dir)
+            self.log_file = f'Evaluation_Recording/{self.jobtype}/{self.TIME}/evaluation_{self.TIME}.log'
+            self.evaluation_logger = setup_logger(f'evaluation_{self.TIME}_logger', self.log_file)
 
         else:
             os.makedirs(f'Training_Recording/{self.jobtype}/{self.TIME}')
@@ -182,15 +192,6 @@ class FileProcessing:
         self.start_epoch = start_epoch
         return start_epoch
 
-    def generation_log(self, idx: int, smi: str, mols: list | None):
-        if mols:
-            info = json.dumps({
-                'idx': idx, 'smiles': smi, 'rotable_bonds': mols[0].n_rotable_bonds, 'n_confs': len(mols)
-                })
-            self.generation_logger.info(info)
-        else:
-            self.generation_logger.error(f'Failed to generate conformers for {smi}')
-
     def training_log(
         self,
         epoch: int,
@@ -206,16 +207,26 @@ class FileProcessing:
                 f'Best is epoch {best_epoch} with value: {best_val_loss}.'
                 )
 
+    def generation_log(self, idx: int, smi: str, mols: list | None):
+        if mols:
+            info = json.dumps({
+                'idx': idx, 'smiles': smi, 'rotable_bonds': mols[0].n_rotable_bonds, 'n_confs': len(mols)
+                })
+            self.generation_logger.info(info)
+        else:
+            self.generation_logger.error(f'Failed to generate conformers for {smi}')
+    
     def hptuning_log(self, study: optuna.Study) -> None:
         self.hptuning_logger.info(f'best value: {study.best_value}')
         self.hptuning_logger.info(f'best params: {study.best_params}')
 
     def ending_log(
         self,
-        end_time: float,
-        start_time: float,
+        end_time: float | None,
+        start_time: float | None,
         epoch: int | None,
-        conformer_dict: dict | None
+        conformer_dict: dict | None,
+        eval_stats: EvaluationMetrics | None
         ) -> None:
         tot_time = end_time - start_time
         if self.param['mode'] == 'training':
@@ -227,6 +238,7 @@ class FileProcessing:
             self.training_logger.info(f'Total time: {hours} h {minutes} m {seconds} s')
             hours, minutes, seconds = convert_time(epoch_time)
             self.training_logger.info(f'Time per epoch: {hours} h {minutes} m {seconds} s')
+
         elif self.param['mode'] == 'generation':
             num_fail = sum(1 for value in conformer_dict.values() if value is None)
             num_success = len(conformer_dict) - num_fail
@@ -241,3 +253,39 @@ class FileProcessing:
             hours, minutes, seconds = convert_time(avg_time)
             self.generation_logger.info(f'Time per molecule: {hours} h {minutes} m {seconds} s')
 
+        elif self.param['mode'] == 'evaluation':
+            for i, current_threshold in enumerate(eval_stats.RMSD_THRESHOLDS):
+                self.evaluation_logger.info(f'\n--- RMSD Threshold: {current_threshold:.3f} ---')
+
+                # Account for molecules with complete model failures (no predicted conformers)
+                # These failures contribute 0% to coverage
+                current_recall_coverage_vals = np.concatenate((
+                    eval_stats.all_recall_coverages[:, i],
+                    np.zeros(eval_stats.num_model_failures)
+                    ))
+                current_precision_coverage_vals = np.concatenate((
+                    eval_stats.all_precision_coverages[:, i],
+                    np.zeros(eval_stats.num_model_failures)
+                    ))
+
+                self.evaluation_logger.info(f'Recall Coverage:')
+                self.evaluation_logger.info(f'  Mean = {np.nanmean(current_recall_coverage_vals) * 100:.2f}%')
+                self.evaluation_logger.info(f'  Median = {np.nanmedian(current_recall_coverage_vals) * 100:.2f}%')
+
+                self.evaluation_logger.info(f'Precision Coverage:')
+                self.evaluation_logger.info(f'  Mean = {np.nanmean(current_precision_coverage_vals) * 100:.2f}%')
+                self.evaluation_logger.info(f'  Median = {np.nanmedian(current_precision_coverage_vals) * 100:.2f}%')
+
+            self.evaluation_logger.info(f'\n--- Overall Average Minimum RMSD ---')
+            self.evaluation_logger.info(f'Average Minimum RMSD Recall (AMR Recall):')
+            self.evaluation_logger.info(f'  Mean = {np.nanmean(eval_stats.all_amr_recalls):.4f}')
+            self.evaluation_logger.info(f'  Median = {np.nanmedian(eval_stats.all_amr_recalls):.4f}')
+
+            self.evaluation_logger.info(f'Average Minimum RMSD Precision (AMR Precision):')
+            self.evaluation_logger.info(f'  Mean = {np.nanmean(eval_stats.all_amr_precisions):.4f}')
+            self.evaluation_logger.info(f'  Median = {np.nanmedian(eval_stats.all_amr_precisions):.4f}')
+
+            self.evaluation_logger.info(f'\n--- Summary ---')
+            self.evaluation_logger.info(f'Compared {len(eval_stats.evaluation_results)} conformer sets.')
+            self.evaluation_logger.info(f'Model failed to generate conformers for {eval_stats.num_model_failures} molecules.')
+            self.evaluation_logger.info(f'Encountered RDKit errors during RMSD calculation for {eval_stats.num_additional_failures} molecules.')

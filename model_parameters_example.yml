@@ -46,7 +46,7 @@ early_stopping:
   patience: 20
   delta: 0
 
-### generation
+### generation ###
 test_csv: ...
 pre_mmff: False
 post_mmff: False
@@ -55,3 +55,7 @@ single_conf: False
 inference_steps: 20
 ode: False
 dump_pymol: False
+
+### evaluation ###
+true_confs: ...
+gen_confs: ...

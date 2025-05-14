@@ -1,11 +1,19 @@
 import torch, optuna
 import os, time, yaml, json, pickle
+import numpy as np
+from multiprocessing import Pool
+from functools import partial
 
 from dataset.data_processing import DataProcessing
 from model.model_utils import gen_model, gen_optimizer, gen_scheduler
 from training.torus import Torus
 from training.train import train, validate
 from generation.sampling import sample_confs
+from evaluation.eval_utils import (EvaluationMetrics,
+                                   preparation,
+                                   calculate_rmsds_for_true_conformer,
+                                   aggregate_evaluation_results,
+                                   RMSD_THRESHOLDS)
 from utils.setup_seed import setup_seed
 from utils.file_processing import FileProcessing
 from utils.gpu_monitor import GPUMonitor
@@ -36,10 +44,7 @@ def training(param: dict, ht_param: dict | None = None, trial: optuna.Trial | No
     optimizer = gen_optimizer(param, model)
     scheduler = gen_scheduler(param, optimizer)
 
-    fp.basic_info_log(
-        train_loader, val_loader, test_loader,
-        model, dp_end_time, dp_start_time
-        )
+    fp.basic_info_log(train_loader, val_loader, test_loader, model, dp_end_time, dp_start_time)
 
     model_saving = SaveModel(param, model_dir, ckpt_dir, training_logger.info)
     start_epoch = fp.pre_train(model, optimizer, device, model_saving)
@@ -105,6 +110,52 @@ def generation(param: dict):
 
     gpu_monitor.stop()
 
+def evaluation(param: dict):
+    fp = FileProcessing(param)
+    fp.pre_make()
+    log_file = fp.log_file
+    evaluation_logger = fp.evaluation_logger
+
+    evaluation_logger.info('Preparing RMSD Calculation Jobs...')
+    num_model_failures, evaluation_results, rmsds_calculation_jobs = preparation(param, evaluation_logger.warning)
+
+    evaluation_logger.info(f'Performing Parallel RMSD Calculation with {param["num_workers"]} workers...')
+    
+    if param['num_workers'] > 1:
+        with Pool(param['num_workers']) as p:
+            map_function = p.imap_unordered
+            results_iterator = map_function(
+                partial(calculate_rmsds_for_true_conformer, trace_func=evaluation_logger.warning),
+                rmsds_calculation_jobs
+                )
+            for result in results_iterator:
+                smi, true_conf_idx, rmsds = result
+                evaluation_results[smi]['rmsd'][true_conf_idx] = rmsds
+    else:
+        results_iterator = map(
+            partial(calculate_rmsds_for_true_conformer, trace_func=evaluation_logger.warning),
+            rmsds_calculation_jobs
+            )
+        for result in results_iterator:
+            smi, true_conf_idx, rmsds = result
+            evaluation_results[smi]['rmsd'][true_conf_idx] = rmsds
+
+    evaluation_logger.info('Aggregating Performance Stats...')
+    (all_recall_coverages, all_amr_recalls, all_precision_coverages, all_amr_precisions,
+     num_additional_failures) = aggregate_evaluation_results(evaluation_results)
+
+    eval_stats = EvaluationMetrics(
+        RMSD_THRESHOLDS=RMSD_THRESHOLDS,
+        num_model_failures=num_model_failures,
+        num_additional_failures=num_additional_failures,
+        all_recall_coverages=all_recall_coverages,
+        all_amr_recalls=all_amr_recalls,
+        all_precision_coverages=all_precision_coverages,
+        all_amr_precisions=all_amr_precisions,
+        evaluation_results=evaluation_results
+    )
+    fp.ending_log(None, None, None, None, eval_stats)
+
 def main():
     TIME = time.strftime('%b_%d_%Y_%H%M%S', time.localtime())
     with open('model_parameters.yml', 'r', encoding='utf-8') as mp:
@@ -120,6 +171,8 @@ def main():
         training(param)
     elif param['mode'] == 'generation':
         generation(param)
+    elif param['mode'] == 'evaluation':
+        evaluation(param)
 
 if __name__ == '__main__':
     main()
