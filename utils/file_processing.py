@@ -23,6 +23,26 @@ def setup_logger(logger_name: str, log_file: str, level=logging.INFO) -> logging
 
     return logger
 
+def get_exp_dir(model_path: str) -> str | None:
+    current_dir = os.path.dirname(model_path)
+
+    while True:
+        model_subdir_path = os.path.join(current_dir, 'Model')
+        params_file_path = os.path.join(current_dir, 'model_parameters.yml')
+
+        model_subdir_exists = os.path.isdir(model_subdir_path)
+        params_file_exists = os.path.isfile(params_file_path)
+
+        if model_subdir_exists and params_file_exists:
+            return current_dir
+
+        parent_dir = os.path.dirname(current_dir)
+
+        if parent_dir == current_dir:
+            return None
+
+        current_dir = parent_dir
+
 class FileProcessing:
     def __init__(
         self,
@@ -161,7 +181,7 @@ class FileProcessing:
             state_dict: dict = torch.load(pretrained_model, map_location=device)
             self.load_model(state_dict, model, optimizer, mode)
             start_epoch = 1
-            pre_dir = os.path.dirname(os.path.dirname(os.path.dirname(pretrained_model)))
+            pre_dir = get_exp_dir(pretrained_model)
             with open(f'{pre_dir}/model_parameters.yml', 'r', encoding='utf-8') as mp:
                 pre_param: dict = yaml.full_load(mp)
             for p in [
@@ -176,7 +196,7 @@ class FileProcessing:
                 state_dict: dict = torch.load(pretrained_model, map_location=device)
                 self.load_model(state_dict, model, optimizer, mode)
                 start_epoch = state_dict['epoch'] + 1
-                pre_dir = os.path.dirname(os.path.dirname(os.path.dirname(pretrained_model)))
+                pre_dir = get_exp_dir(pretrained_model)
                 pre_TIME = os.path.basename(pre_dir)
                 pre_log_file = os.path.join(pre_dir, f'training_{pre_TIME}.log')
                 shutil.copy(pre_log_file, f'Training_Recording/{self.jobtype}/{self.TIME}/pre.log')
