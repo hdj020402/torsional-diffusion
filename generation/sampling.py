@@ -57,7 +57,7 @@ def embed_seeds(
     if not seed_confs:
         embed_num_confs = n_confs if not single_conf else 1
         try:
-            mol = AllChem.EmbedMultipleConfs(mol, numConfs=embed_num_confs, numThreads=5)
+            _ = AllChem.EmbedMultipleConfs(mol, numConfs=embed_num_confs, numThreads=5)
         except Exception as e:
             print(e.output)
             pass
