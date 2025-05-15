@@ -63,7 +63,7 @@ class FileProcessing:
             self.log_file = f'HPTuning_Recording/{self.jobtype}/{self.TIME}/{trial_name}/training_{trial_name}.log'
             self.training_logger = setup_logger(f'training_{trial_name}_logger', self.log_file)
 
-        elif self.jobtype == 'generation':
+        elif self.param['mode'] == 'generation':
             os.makedirs(f'Generation_Recording/{self.jobtype}/{self.TIME}')
             if self.param['dump_pymol']:
                 self.pdb_dir = f'Generation_Recording/{self.jobtype}/{self.TIME}/PDB'
@@ -78,7 +78,7 @@ class FileProcessing:
             self.log_file = f'Generation_Recording/{self.jobtype}/{self.TIME}/generation_{self.TIME}.log'
             self.generation_logger = setup_logger(f'generation_{self.TIME}_logger', self.log_file)
 
-        elif self.jobtype == 'evaluation':
+        elif self.param['mode'] == 'evaluation':
             os.makedirs(f'Evaluation_Recording/{self.jobtype}/{self.TIME}')
             self.data_dir = f'Evaluation_Recording/{self.jobtype}/{self.TIME}/Data'
             os.makedirs(self.data_dir)
