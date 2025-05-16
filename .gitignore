@@ -3,6 +3,8 @@
 Training_Recording/
 Prediction_Recording/
 HPTuning_Recording/
+Generation_Recording/
+Evaluation_Recording/
 **/processed/
 *.png
 test.ipynb
