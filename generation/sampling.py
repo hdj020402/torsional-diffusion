@@ -15,14 +15,12 @@ from utils.visualise import PDBFile
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 still_frames = 10
 
-
 def try_mmff(mol: Chem.rdchem.Mol) -> bool:
     try:
         AllChem.MMFFOptimizeMoleculeConfs(mol, mmffVariant='MMFF94s')
         return True
     except Exception as e:
         return False
-
 
 def get_seed(
     smi: str,
@@ -42,7 +40,6 @@ def get_seed(
     data.edge_mask, data.mask_rotate = get_transformation_mask(data)
     data.edge_mask = torch.tensor(data.edge_mask)
     return mol, data
-
 
 def embed_seeds(
     mol: Chem.rdchem.Mol,
@@ -91,7 +88,6 @@ def embed_seeds(
         [mol.RemoveConformer(j) for j in range(n_confs) if j != 0]
     return conformers, pdb
 
-
 def perturb_seeds(conformers: list[Data], pdb: PDBFile=None) -> list[Data]:
     for i, data_conf in enumerate(conformers):
         torsion_updates = np.random.uniform(low=-np.pi,high=np.pi, size=data_conf.edge_mask.sum())
@@ -101,7 +97,6 @@ def perturb_seeds(conformers: list[Data], pdb: PDBFile=None) -> list[Data]:
         if pdb:
             pdb.add(data_conf.pos, part=i, order=1, repeat=still_frames)
     return conformers
-
 
 def sample(
     conformers: list[Data],
@@ -139,13 +134,13 @@ def sample(
 
     for batch_idx, data in enumerate(loader):
         # Move data batch to the appropriate device (GPU or CPU)
-        data_gpu = copy.deepcopy(data).to(model.device) # Assuming model has a .device attribute or infer from model.parameters()...device
+        data_gpu = copy.deepcopy(data).to(device) # Assuming model has a .device attribute or infer from model.parameters()...device
 
         # Iterate through each noise level
         for sigma_idx, sigma in enumerate(sigma_schedule):
 
             # Set the current noise level for the model input
-            data_gpu.node_sigma = sigma * torch.ones(data_gpu.num_nodes, device=model.device)
+            data_gpu.node_sigma = sigma * torch.ones(data_gpu.num_nodes, device=device)
 
             # Model prediction step (get the score/gradient)
             with torch.no_grad():
@@ -154,7 +149,7 @@ def sample(
             # Calculate g factor (related to the diffusion coefficient)
             g = sigma * torch.sqrt(torch.tensor(2 * np.log(sigma_max / sigma_min)))
             # Sample random noise for SDE
-            z = torch.normal(mean=0, std=1, size=data_gpu.edge_pred.shape).to(model.device) # Ensure z is on the correct device
+            z = torch.normal(mean=0, std=1, size=data_gpu.edge_pred.shape).to(device) # Ensure z is on the correct device
             # Get the predicted score from the model
             score = data_gpu.edge_pred # Model output (predicted gradient)
 
@@ -170,7 +165,7 @@ def sample(
             # perturb needs to be on CPU for apply_torsion_and_update_pos which likely works on numpy arrays
             conf_dataset.apply_torsion_and_update_pos(data, perturb.cpu().numpy())
             # Update the positions on the GPU data object for the next model call
-            data_gpu.pos = data.pos.to(model.device)
+            data_gpu.pos = data.pos.to(device)
 
             if pdb:
                  for conf_idx in range(data.num_graphs):
@@ -183,7 +178,6 @@ def sample(
                      pdb.add(coords, part=batch_size * batch_idx + conf_idx, order=sigma_idx + 2, repeat=num_frames)
 
     return conformers
-
 
 def pyg_to_mol(
     mol: Chem.rdchem.Mol,
@@ -207,7 +201,6 @@ def pyg_to_mol(
     mol.n_rotable_bonds = data.edge_mask.sum()
     if not copy: return mol
     return deepcopy(mol)
-
 
 class InferenceDataset(Dataset):
     def __init__(self, data_list):
@@ -244,7 +237,7 @@ def sample_confs(
         with open(param['seed_confs'], 'rb') as f:
             seed_confs = pickle.load(f)
 
-    mol, data = get_seed(smi, param['atom_type'])
+    mol, data = get_seed(smi, seed_confs, param['atom_type'])
     if not mol:
         print('Failed to get seed', smi)
         return None
