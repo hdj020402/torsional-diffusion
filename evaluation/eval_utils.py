@@ -191,7 +191,7 @@ def preparation(param: dict, trace_func: Callable=print) -> tuple[int, dict[str,
         }
 
         for i_true in range(num_true_confs):
-            rmsds_calculation_jobs.append((smi, i_true, true_molecules, model_predictions))
+            rmsds_calculation_jobs.append((smi, i_true, true_molecules[smi][i_true], model_predictions[smi]))
 
     random.shuffle(rmsds_calculation_jobs)
 
@@ -217,11 +217,7 @@ def calculate_rmsds_for_true_conformer(job_data: tuple, trace_func: Callable=pri
             true conformer index, and a list of corresponding RMSDs.
             The RMSD list will be filled with NaN if a calculation fails.
     """
-    smi, true_conf_idx, true_molecules_map, model_predictions_map = job_data
-
-    true_conformers = true_molecules_map[smi]
-    model_conformers = model_predictions_map[smi]
-    current_true_conf = true_conformers[true_conf_idx]
+    smi, true_conf_idx, current_true_conf, model_conformers = job_data
 
     rmsds = []
     for model_conf in model_conformers:
