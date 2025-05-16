@@ -11,6 +11,7 @@ from rdkit import Chem, Geometry
 from rdkit.Chem import AllChem
 
 from utils.visualise import PDBFile
+from utils.utils import encode_to_base64
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 still_frames = 10
@@ -29,7 +30,6 @@ def get_seed(
     ) -> tuple[None, None] | tuple[Chem.rdchem.Mol, Data | None]:
     if seed_confs:
         if smi not in seed_confs:
-            print("smile not in seeds", smi)
             return None, None
         mol = seed_confs[smi][0]
         data = featurize_mol(mol, atom_type)
@@ -56,10 +56,8 @@ def embed_seeds(
         try:
             _ = AllChem.EmbedMultipleConfs(mol, numConfs=embed_num_confs, numThreads=5)
         except Exception as e:
-            print(e.output)
             pass
         if len(mol.GetConformers()) != embed_num_confs:
-            print(len(mol.GetConformers()), '!=', embed_num_confs)
             return [], None
         if mmff: try_mmff(mol)
 
@@ -239,7 +237,6 @@ def sample_confs(
 
     mol, data = get_seed(smi, seed_confs, param['atom_type'])
     if not mol:
-        print('Failed to get seed', smi)
         return None
 
     n_rotable_bonds = int(data.edge_mask.sum())
@@ -248,7 +245,6 @@ def sample_confs(
         apply_pdb=param['dump_pymol'], mmff=param['pre_mmff']
         )
     if not conformers:
-        print("Failed to embed", smi)
         return None
 
     if n_rotable_bonds > 0.5:
@@ -261,7 +257,7 @@ def sample_confs(
             )
 
     if param['dump_pymol']:
-        pdb.write(f'{pdb_dir}/{smi}.pdb', limit_parts=5)
+        pdb.write(f'{pdb_dir}/{encode_to_base64(smi)}.pdb', limit_parts=5)
 
     mols = [pyg_to_mol(mol, conf, param['post_mmff']) for conf in conformers]
 
