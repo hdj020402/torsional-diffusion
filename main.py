@@ -25,7 +25,7 @@ def training(param: dict, ht_param: dict | None = None, trial: optuna.Trial | No
     fp.pre_make()
     plot_dir, model_dir, ckpt_dir = fp.plot_dir, fp.model_dir, fp.ckpt_dir
     log_file = fp.log_file
-    torus = Torus(os.path.dirname(log_file), param['seed'])
+    torus = Torus(param['path'], param['seed'])
     training_logger = fp.training_logger
     gpu_logger = fp.gpu_logger
     gpu_monitor = GPUMonitor(gpu_logger)
@@ -82,7 +82,7 @@ def generation(param: dict):
     fp.pre_make()
     pdb_dir, model_dir, data_dir = fp.pdb_dir, fp.model_dir, fp.data_dir
     log_file = fp.log_file
-    torus = Torus(os.path.dirname(log_file), param['seed'])
+    torus = Torus(param['path'], param['seed'])
     generation_logger = fp.generation_logger
     gpu_logger = fp.gpu_logger
     gpu_monitor = GPUMonitor(gpu_logger)
@@ -104,7 +104,7 @@ def generation(param: dict):
         conformer_dict[smi] = mols
     end_time = time.perf_counter()
 
-    fp.ending_log(end_time, start_time, None, conformer_dict)
+    fp.ending_log(end_time, start_time, conformer_dict=conformer_dict)
     with open(f'{data_dir}/output.pkl', 'wb') as f:
         pickle.dump(conformer_dict, f)
 
@@ -154,7 +154,7 @@ def evaluation(param: dict):
         all_amr_precisions=all_amr_precisions,
         evaluation_results=evaluation_results
     )
-    fp.ending_log(None, None, None, None, eval_stats)
+    fp.ending_log(eval_stats=eval_stats)
 
 def main():
     TIME = time.strftime('%b_%d_%Y_%H%M%S', time.localtime())
