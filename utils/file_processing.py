@@ -7,9 +7,9 @@ from copy import deepcopy
 
 from model.score_model import TensorProductScoreModel
 from evaluation.eval_utils import EvaluationMetrics
-from utils.utils import convert_time
 from utils.save_model import SaveModel
 from utils.post_processing import read_log
+from utils.utils import Timer
 
 def setup_logger(logger_name: str, log_file: str, level=logging.INFO) -> logging.Logger:
     logger = logging.getLogger(logger_name)
@@ -122,7 +122,8 @@ class FileProcessing:
             self.log_file = f'Training_Recording/{self.jobtype}/{self.TIME}/training_{self.TIME}.log'
             self.training_logger = setup_logger(f'training_{self.TIME}_logger', self.log_file)
 
-        self.gpu_logger = setup_logger(f'gpu_{self.TIME}_logger', f'{os.path.dirname(self.log_file)}/gpu_monitor.log')
+        if not self.param['mode'] == 'evaluation':
+            self.gpu_logger = setup_logger(f'gpu_{self.TIME}_logger', f'{os.path.dirname(self.log_file)}/gpu_monitor.log')
 
     def basic_info_log(
         self,
@@ -130,11 +131,9 @@ class FileProcessing:
         val_loader: DataLoader,
         test_loader: DataLoader,
         model: TensorProductScoreModel,
-        end_time: float,
-        start_time: float,
+        timer: Timer
         ) -> None:
-        dp_time = end_time - start_time
-        hours, minutes, seconds = convert_time(dp_time)
+        days, hours, minutes, seconds = timer.get_tot_time()
         # if self.param['mode'] == 'prediction':
         #     self.prediction_logger.info(f"data_path: {os.path.abspath(self.param['path'])}")
         #     self.prediction_logger.info(json.dumps(self.param))
@@ -153,7 +152,7 @@ class FileProcessing:
         self.training_logger.info(f"size of training set: {len(train_loader.dataset)}")
         self.training_logger.info(f"batch size: {train_loader.batch_size}")
         self.training_logger.info(f"Model:\n{model}")
-        self.training_logger.info(f"Data processing time: {hours} h {minutes} m {seconds} s")
+        self.training_logger.info(f"Data processing time: {days} d {hours} h {minutes} m {seconds} s")
         self.training_logger.info("Begin training...")
 
     def load_model(
@@ -242,36 +241,32 @@ class FileProcessing:
 
     def ending_log(
         self,
-        end_time: float | None=None,
-        start_time: float | None=None,
+        timer: Timer,
         epoch: int | None=None,
         conformer_dict: dict | None=None,
         eval_stats: EvaluationMetrics | None=None
         ) -> None:
-        tot_time = end_time - start_time
         if self.param['mode'] == 'training':
-            epoch_time = tot_time / (epoch - self.start_epoch + 1)
             self.training_logger.info('Ending...')
             self.training_logger.info(f"Best val loss: {self.best_val_loss}")
             self.training_logger.info(f"Best epoch: {self.best_epoch}")
-            hours, minutes, seconds = convert_time(tot_time)
-            self.training_logger.info(f'Total time: {hours} h {minutes} m {seconds} s')
-            hours, minutes, seconds = convert_time(epoch_time)
-            self.training_logger.info(f'Time per epoch: {hours} h {minutes} m {seconds} s')
+            days, hours, minutes, seconds = timer.get_tot_time()
+            self.training_logger.info(f'Total time: {days} d {hours} h {minutes} m {seconds} s')
+            days, hours, minutes, seconds = timer.get_average_time(epoch - self.start_epoch + 1)
+            self.training_logger.info(f'Time per epoch: {days} d {hours} h {minutes} m {seconds} s')
 
         elif self.param['mode'] == 'generation':
             num_fail = sum(1 for value in conformer_dict.values() if value is None)
             num_success = len(conformer_dict) - num_fail
-            avg_time = tot_time / num_success
             self.generation_logger.info('Ending...')
             self.generation_logger.info(
                 f'Successfully generated conformers for {num_success} out of '
                 f'{len(conformer_dict)} molecules; {num_fail} failed.'
                 )
-            hours, minutes, seconds = convert_time(tot_time)
-            self.generation_logger.info(f'Total time: {hours} h {minutes} m {seconds} s')
-            hours, minutes, seconds = convert_time(avg_time)
-            self.generation_logger.info(f'Time per molecule: {hours} h {minutes} m {seconds} s')
+            days, hours, minutes, seconds = timer.get_tot_time()
+            self.generation_logger.info(f'Total time: {days} d {hours} h {minutes} m {seconds} s')
+            days, hours, minutes, seconds = timer.get_average_time(num_success)
+            self.generation_logger.info(f'Time per molecule: {days} d {hours} h {minutes} m {seconds} s')
 
         elif self.param['mode'] == 'evaluation':
             with open(f'{self.data_dir}/evaludation_results.pkl', 'wb') as f:

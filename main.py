@@ -1,6 +1,5 @@
 import torch, optuna
 import os, time, yaml, json, pickle
-import numpy as np
 from multiprocessing import Pool
 from functools import partial
 
@@ -19,6 +18,7 @@ from utils.file_processing import FileProcessing
 from utils.gpu_monitor import GPUMonitor
 from utils.reprocess import reprocess
 from utils.save_model import SaveModel
+from utils.utils import Timer
 
 def training(param: dict, ht_param: dict | None = None, trial: optuna.Trial | None = None):
     fp = FileProcessing(param, ht_param, trial)
@@ -33,22 +33,25 @@ def training(param: dict, ht_param: dict | None = None, trial: optuna.Trial | No
 
     epoch_num = param['epoch_num']
 
-    dp_start_time = time.perf_counter()
+    dp_timer = Timer()
+    dp_timer.start()
     DATA = DataProcessing(param, reprocess = reprocess(param))
     train_loader = DATA.train_loader
     val_loader = DATA.val_loader
     test_loader = DATA.test_loader
-    dp_end_time = time.perf_counter()
+    dp_timer.end()
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = gen_model(param, torus)
     optimizer = gen_optimizer(param, model)
     scheduler = gen_scheduler(param, optimizer)
 
-    fp.basic_info_log(train_loader, val_loader, test_loader, model, dp_end_time, dp_start_time)
+    fp.basic_info_log(train_loader, val_loader, test_loader, model, dp_timer)
 
     model_saving = SaveModel(param, model_dir, ckpt_dir, training_logger.info)
     start_epoch = fp.pre_train(model, optimizer, device, model_saving)
-    start_time = time.perf_counter()
+    timer = Timer()
+    timer.start()
     for epoch in range(start_epoch, epoch_num+1):
         try:
             lr = scheduler.optimizer.param_groups[0]['lr']
@@ -72,9 +75,9 @@ def training(param: dict, ht_param: dict | None = None, trial: optuna.Trial | No
         except torch.cuda.OutOfMemoryError as e:
             training_logger.error(e)
             break
-    end_time = time.perf_counter()
+    timer.end()
 
-    fp.ending_log(end_time, start_time, epoch)
+    fp.ending_log(timer, epoch)
     gpu_monitor.stop()
 
 def generation(param: dict):
@@ -97,14 +100,15 @@ def generation(param: dict):
     test_data = pd.read_csv(param['test_csv'])
 
     conformer_dict = {}
-    start_time = time.perf_counter()
+    timer = Timer()
+    timer.start()
     for smi_idx, (n_confs, smi) in enumerate(zip(test_data['n_confs'], test_data['smiles'])):
         mols = sample_confs(2 * n_confs, smi, param, model, pdb_dir)
         fp.generation_log(smi_idx, smi, mols)
         conformer_dict[smi] = mols
-    end_time = time.perf_counter()
+    timer.end()
 
-    fp.ending_log(end_time, start_time, conformer_dict=conformer_dict)
+    fp.ending_log(timer, conformer_dict=conformer_dict)
     with open(f'{data_dir}/output.pkl', 'wb') as f:
         pickle.dump(conformer_dict, f)
 
@@ -116,6 +120,8 @@ def evaluation(param: dict):
     log_file = fp.log_file
     evaluation_logger = fp.evaluation_logger
 
+    timer = Timer()
+    timer.start()
     evaluation_logger.info('Preparing RMSD Calculation Jobs...')
     num_model_failures, evaluation_results, rmsds_calculation_jobs = preparation(param, evaluation_logger.warning)
 
@@ -154,7 +160,8 @@ def evaluation(param: dict):
         all_amr_precisions=all_amr_precisions,
         evaluation_results=evaluation_results
     )
-    fp.ending_log(eval_stats=eval_stats)
+    timer.end()
+    fp.ending_log(timer, eval_stats=eval_stats)
 
 def main():
     TIME = time.strftime('%b_%d_%Y_%H%M%S', time.localtime())
