@@ -26,3 +26,18 @@ def convert_time(time: float) -> tuple[float]:
     hours, remainder = divmod(time, 3600)
     minutes, seconds = divmod(remainder, 60)
     return hours, minutes, seconds
+
+import base64
+
+def encode_to_base64(input_string: str) -> str:
+    encoded_bytes = base64.b64encode(input_string.encode("utf-8"))
+    encoded_string = encoded_bytes.decode("utf-8").rstrip("=")
+    return encoded_string
+
+def decode_from_base64(encoded_string: str) -> str:
+    padding = 4 - (len(encoded_string) % 4)
+    if padding != 4:
+        encoded_string += "=" * padding
+    decoded_bytes = base64.b64decode(encoded_string)
+    decoded_string = decoded_bytes.decode("utf-8")
+    return decoded_string
