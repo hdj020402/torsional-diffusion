@@ -1,4 +1,4 @@
-import os, json, yaml, shutil, logging
+import os, json, yaml, pickle, shutil, logging
 import torch, optuna
 import numpy as np
 from torch_geometric.loader import DataLoader
@@ -242,11 +242,11 @@ class FileProcessing:
 
     def ending_log(
         self,
-        end_time: float | None,
-        start_time: float | None,
-        epoch: int | None,
-        conformer_dict: dict | None,
-        eval_stats: EvaluationMetrics | None
+        end_time: float | None=None,
+        start_time: float | None=None,
+        epoch: int | None=None,
+        conformer_dict: dict | None=None,
+        eval_stats: EvaluationMetrics | None=None
         ) -> None:
         tot_time = end_time - start_time
         if self.param['mode'] == 'training':
@@ -274,6 +274,8 @@ class FileProcessing:
             self.generation_logger.info(f'Time per molecule: {hours} h {minutes} m {seconds} s')
 
         elif self.param['mode'] == 'evaluation':
+            with open(f'{self.data_dir}/evaludation_results.pkl', 'wb') as f:
+                pickle.dump(eval_stats.evaluation_results, f)
             for i, current_threshold in enumerate(eval_stats.RMSD_THRESHOLDS):
                 self.evaluation_logger.info(f'\n--- RMSD Threshold: {current_threshold:.3f} ---')
 
