@@ -198,7 +198,7 @@ def pyg_to_mol(
             AllChem.MMFFOptimizeMoleculeConfs(mol, mmffVariant='MMFF94s')
         except Exception as e:
             pass
-    mol.n_rotable_bonds = data.edge_mask.sum()
+    mol.n_rotable_bonds = int(data.edge_mask.sum())
     if not copy: return mol
     return deepcopy(mol)
 
