@@ -269,7 +269,7 @@ class FileProcessing:
             self.generation_logger.info(f'Time per molecule: {days} d {hours} h {minutes} m {seconds} s')
 
         elif self.param['mode'] == 'evaluation':
-            with open(f'{self.data_dir}/evaludation_results.pkl', 'wb') as f:
+            with open(f'{self.data_dir}/evaluation_results.pkl', 'wb') as f:
                 pickle.dump(eval_stats.evaluation_results, f)
             for i, current_threshold in enumerate(eval_stats.RMSD_THRESHOLDS):
                 self.evaluation_logger.info(f'\n--- RMSD Threshold: {current_threshold:.3f} ---')
