@@ -272,7 +272,7 @@ class FileProcessing:
             with open(f'{self.data_dir}/evaluation_results.pkl', 'wb') as f:
                 pickle.dump(eval_stats.evaluation_results, f)
             for i, current_threshold in enumerate(eval_stats.RMSD_THRESHOLDS):
-                self.evaluation_logger.info(f'\n--- RMSD Threshold: {current_threshold:.3f} ---')
+                self.evaluation_logger.info(f'--- RMSD Threshold: {current_threshold:.3f} ---')
 
                 # Account for molecules with complete model failures (no predicted conformers)
                 # These failures contribute 0% to coverage
@@ -293,7 +293,7 @@ class FileProcessing:
                 self.evaluation_logger.info(f'  Mean = {np.nanmean(current_precision_coverage_vals) * 100:.2f}%')
                 self.evaluation_logger.info(f'  Median = {np.nanmedian(current_precision_coverage_vals) * 100:.2f}%')
 
-            self.evaluation_logger.info(f'\n--- Overall Average Minimum RMSD ---')
+            self.evaluation_logger.info(f'--- Overall Average Minimum RMSD ---')
             self.evaluation_logger.info(f'Average Minimum RMSD Recall (AMR Recall):')
             self.evaluation_logger.info(f'  Mean = {np.nanmean(eval_stats.all_amr_recalls):.4f}')
             self.evaluation_logger.info(f'  Median = {np.nanmedian(eval_stats.all_amr_recalls):.4f}')
@@ -302,7 +302,7 @@ class FileProcessing:
             self.evaluation_logger.info(f'  Mean = {np.nanmean(eval_stats.all_amr_precisions):.4f}')
             self.evaluation_logger.info(f'  Median = {np.nanmedian(eval_stats.all_amr_precisions):.4f}')
 
-            self.evaluation_logger.info(f'\n--- Summary ---')
+            self.evaluation_logger.info(f'--- Summary ---')
             self.evaluation_logger.info(f'Compared {len(eval_stats.evaluation_results)} conformer sets.')
             self.evaluation_logger.info(f'Model failed to generate conformers for {eval_stats.num_model_failures} molecules.')
             self.evaluation_logger.info(f'Encountered RDKit errors during RMSD calculation for {eval_stats.num_additional_failures} molecules.')
