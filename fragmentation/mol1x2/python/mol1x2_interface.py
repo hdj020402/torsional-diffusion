@@ -2,15 +2,17 @@
 mol1x2 - Python package for combining molecular structures
 """
 
+from typing import Tuple, Union, Any
 import mol1x2 as _mol1x2
 import os
 
+
 class Mol1x2:
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the mol1x2 package"""
         _mol1x2.init_element_table()
         
-    def set_energy_threshold(self, threshold):
+    def set_energy_threshold(self, threshold: float) -> None:
         """Set the energy threshold for filtering conformers
         
         Args:
@@ -18,7 +20,7 @@ class Mol1x2:
         """
         _mol1x2.set_global_thresholds(threshold)
         
-    def get_energy_threshold(self):
+    def get_energy_threshold(self) -> float:
         """Get the current energy threshold
         
         Returns:
@@ -26,19 +28,30 @@ class Mol1x2:
         """
         return _mol1x2.get_global_threshold_e0()
         
-    def combine_structures(self, input1, input2, bond1=(1, 5), bond2=(1, 5), max_output=1000, input_type="auto"):
+    def combine_structures(
+        self, 
+        input1: str, 
+        input2: str, 
+        bond1: Tuple[int, int] = (1, 5), 
+        bond2: Tuple[int, int] = (1, 5), 
+        max_output: int = 1000, 
+        input_type: str = "auto"
+    ) -> Any:
         """Combine two molecular structures from XYZ files or strings
         
         Args:
             input1 (str): Path to the first XYZ file or XYZ content string
             input2 (str): Path to the second XYZ file or XYZ content string
-            bond1 (tuple): Bond atoms for the first molecule (1-based indices)
-            bond2 (tuple): Bond atoms for the second molecule (1-based indices)
+            bond1 (Tuple[int, int]): Bond atoms for the first molecule (1-based indices)
+            bond2 (Tuple[int, int]): Bond atoms for the second molecule (1-based indices)
             max_output (int): Maximum number of output conformers
             input_type (str): Type of input - "file", "string", or "auto" (default: "auto")
             
         Returns:
             CombinedResult: Result containing combined conformers
+            
+        Raises:
+            RuntimeError: If failed to read input files or parse input strings
         """
         # Read the first input
         mol1 = _mol1x2.XYZSet()
@@ -72,27 +85,39 @@ class Mol1x2:
         
         return result
 
-# Convenience function
-def combine_molecules(input1, input2, bond1=(1, 5), bond2=(1, 5), threshold=0.16, max_output=1000, input_type="auto"):
+
+def combine_molecules(
+    input1: str, 
+    input2: str, 
+    bond1: Tuple[int, int] = (1, 5), 
+    bond2: Tuple[int, int] = (1, 5), 
+    threshold: float = 0.16, 
+    max_output: int = 1000, 
+    input_type: str = "auto"
+) -> Any:
     """Convenience function to combine two molecular structures
     
     Args:
         input1 (str): Path to the first XYZ file or XYZ content string
         input2 (str): Path to the second XYZ file or XYZ content string
-        bond1 (tuple): Bond atoms for the first molecule (1-based indices)
-        bond2 (tuple): Bond atoms for the second molecule (1-based indices)
+        bond1 (Tuple[int, int]): Bond atoms for the first molecule (1-based indices)
+        bond2 (Tuple[int, int]): Bond atoms for the second molecule (1-based indices)
         threshold (float): Energy threshold for filtering conformers
         max_output (int): Maximum number of output conformers
         input_type (str): Type of input - "file", "string", or "auto" (default: "auto")
         
     Returns:
         CombinedResult: Result containing combined conformers
+        
+    Raises:
+        RuntimeError: If failed to read input files or parse input strings
     """
     mol = Mol1x2()
     mol.set_energy_threshold(threshold)
     return mol.combine_structures(input1, input2, bond1, bond2, max_output, input_type)
 
-def save_conformers_to_xyz(result, filename):
+
+def save_conformers_to_xyz(result: Any, filename: str) -> None:
     """Save conformers to XYZ format file
     
     Args:
@@ -119,6 +144,7 @@ def save_conformers_to_xyz(result, filename):
                 y = conformer.zb[3*j+1]
                 z = conformer.zb[3*j+2]
                 f.write(f"{element:2s} {x:12.6f} {y:12.6f} {z:12.6f}\n")
+
 
 # Export classes and functions
 XYZSet = _mol1x2.XYZSet
